@@ -33,6 +33,53 @@ User uploads image
                                                |
                                   Live image URLs fetched from Tokopedia GQL
 ```
+## Repository Structure
+
+This repository is organized as a monorepo to separate research experiments, production data pipelines, and deployment code. You can directly access and view the live hosted repositories for both the frontend and backend via the links embedded below.
+
+```text
+toko-lens-retrieval/
+│
+├── README.md                # Main project documentation
+├── requirements.txt         # Core Python dependencies for local scripts
+│
+├── notebooks/                                       # Development and experiment notebooks
+│   ├── Scrapping_Tokopedia.ipynb                    # Initial playground for scraping logic and API testing
+│   ├── embedding-images-phase1-clip.ipynb           # Batch 1 of image embedding extraction using CLIP
+│   ├── embedding-images-phase2-clip.ipynb           # Batch 2 of image embedding extraction using CLIP
+│   ├── embedding-images-phase3-clip.ipynb           # Batch 3 of image embedding extraction using CLIP
+│   ├── embedding-images-phase4-clip.ipynb           # Batch 4 of image embedding extraction using CLIP
+│   ├── embedding-images-phase5-clip.ipynb           # Batch 5 of image embedding extraction using CLIP
+│   ├── embedding-images-phase6-clip.ipynb           # Batch 6 of image embedding extraction using CLIP
+│   ├── embedding-images-phase7-clip.ipynb           # Batch 7 of image embedding extraction using CLIP
+│   ├── embedding-images-phase8-clip.ipynb           # Batch 8 of image embedding extraction using CLIP
+│   ├── embedding-images-phase9-clip.ipynb           # Batch 9 of image embedding extraction using CLIP
+│   ├── embedding-images-phase10-clip.ipynb          # Batch 10 of image embedding extraction using CLIP
+│   ├── embedding-images-phase11-clip.ipynb          # Batch 11 of image embedding extraction using CLIP
+│   ├── embedding-images-phase12-clip.ipynb          # Batch 12 of image embedding extraction using CLIP
+│   ├── embedding-images-phase13-clip.ipynb          # Batch 13 of image embedding extraction using CLIP
+│   ├── embedding-images-phase14-clip.ipynb          # Batch 14 of image embedding extraction using CLIP
+│   ├── creating-faiss-clip-versi-indexhnswflat.ipynb# Building and evaluating the IndexHNSWFlat vector index
+│   ├── push_images_zip_to_kaggle.ipynb              # Automation script to package and upload image archives to Kaggle
+│   └── push-faiss-clip-to-hf.ipynb                  # Utility to push completed FAISS indices to Hugging Face Hub
+│
+├── scripts/                 # Core Pipeline: Independent ETL scripts executed sequentially
+│   ├── scrap_shop_list.py# Scrapes shop list via Selenium (Outputs: list_shop.csv)
+│   ├── scrap_shop_id.py  # Resolves shop domains to SIDs via GraphQL (Outputs: shop_with_ID.csv)
+│   ├── scrap_product.py  # Extracts product metadata to SQLite and downloads images
+│   └── embedding_images.py# Computes ViT and BGE-M3 embeddings and builds FAISS indices
+│
+├── backend/                 # API Service (Hosted on Hugging Face Spaces)
+│   │                        # Live Repository: [HuggingFace](https://huggingface.co/spaces/Viewww/image-retrieval-backend/tree/main)
+│   ├── app.py               # FastAPI application and vector search logic
+│   ├── Dockerfile           # Containerization setup for the backend environment
+│   └── requirements.txt     # Specific dependencies for the backend server
+│
+└── frontend/                # User Interface (Hosted on Hugging Face Spaces)
+    │                        # Live Repository: [HuggingFace](https://huggingface.co/spaces/Viewww/TokoLens/tree/main)
+    ├── index.html           # Main user interface for multimodal search
+    ├── style.css            # Visual styling and responsive layouts
+    └── assets/              # Local JavaScript modules for image cropping and API integration
 
 ---
 
