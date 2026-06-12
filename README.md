@@ -10,29 +10,46 @@ Toko Lens is an end-to-end multimodal search system built on top of a large-scal
 
 ---
 
-## Architecture Overview
+## How the Search Works
 
 ```
-User uploads image
-       |
-  [Optional crop]
-       |
-  [Optional text query + price range]
-       |
-  FastAPI backend
-  |-- ViT encodes image  -----------> HNSW index search --> top-5000 visual matches
-  |-- BGE-M3 encodes text ----------> IVF-PQ index search --> top-5000 text matches
-                                               |
-                                    Intersection of both candidate sets
-                                               |
-                                    SQLite metadata lookup + price filter
-                                               |
-                                    Re-rank by visual similarity order
-                                               |
-                                    Return top-100 product cards
-                                               |
-                                  Live image URLs fetched from Tokopedia GQL
+User uploads image (or captures via camera)
+              │
+              ▼
+     [Optional: crop with Cropper.js]
+              │
+              ▼
+     [Optional: add text keyword + price range]
+              │
+              ▼
+         FastAPI backend
+              │
+              ├─ CLIP vision encoder
+              │         │ 1024-dim vector
+              │         ▼
+              │   HNSW FAISS search → top-2000 visual candidates
+              │
+              └─ (if text provided)
+                  CLIP text encoder
+                        │ 1024-dim vector (same space)
+                        ▼
+                  HNSW FAISS search → top-5000 text candidates
+                        │
+                  Intersect with visual candidates
+                        │
+              SQLite metadata lookup
+                        │
+              Price range filter
+                        │
+              Sort by visual similarity rank
+                        │
+              Return top-100 product cards
+                        │
+              Live image URLs fetched from Tokopedia GQL
 ```
+
+---
+
 ## Repository Structure
 
 This repository is organized as a monorepo to separate research experiments, production data pipelines, and deployment code. You can directly access and view the live hosted repositories for both the frontend and backend via the links embedded below.
@@ -85,93 +102,159 @@ toko-lens-retrieval/
 
 ## Data Pipeline
 
-### Step 1: Scraping Shops (13,165 Shops)
+### Phase 1: Shop Scraping
 
-All shops carrying the **Mall** label on Tokopedia were scraped to collect shop names and their corresponding **Shop IDs (SID)**. The Mall label filters for verified, high-quality merchants and keeps the product catalogue representative. The result was **13,165 unique shop entries**.
+The pipeline begins by collecting all shops labelled **Mall** on Tokopedia. Mall-labelled stores represent verified, high-quality merchants and provide a consistent product quality baseline. The scraper collected **13,165 unique shop names**.
 
-### Step 2: Scraping Products (3,614,752 Products, 7 Phases)
+For each shop name, a second scraping pass retrieved the corresponding **Shop ID (SID)**, the internal Tokopedia identifier required to query product listings from the platform's GraphQL API.
 
-Using the SIDs, the product catalogue of every shop was queried through Tokopedia's GraphQL API to collect `Product_Name`, `Price`, `Rating`, and `URL_Product`. Due to Colab runtime limits and occasional session crashes, this stage was divided into **7 sequential phases**, each resuming from where the previous one stopped. Total products collected: **3,614,752 listings**.
+### Phase 2: Product Scraping (7 Phases)
 
-Dataset published on Kaggle:
-[tokopedia-products-with-images-dataset-v1](https://www.kaggle.com/datasets/fati22/tokopedia-products-with-images-dataset-v1)
+Using the collected SIDs, the pipeline queried the product catalogue of every shop, extracting four fields per product: `Product_Name`, `Price`, `Rating`, and `URL_Product`. Because Colab free-tier runtime sessions have hard time limits and occasionally crash mid-run, the scraping was divided into **7 sequential phases**, each resuming from the last completed shop. The combined result was a raw product table of **3,614,752 listings**.
 
-### Step 3: Scraping Product Images (3,475,088 Images, 15 Phases)
+The full product dataset is publicly available on Kaggle:
+**[tokopedia-products-with-images-dataset-v1](https://www.kaggle.com/datasets/fati22/tokopedia-products-with-images-dataset-v1)**
 
-The primary image for each product was downloaded by visiting its product URL. Image downloads are time-intensive, and Colab sessions would expire before completing the full catalogue, so this stage was run as **15 sequential phases**. Some products (primarily prescription medical items) have no scrapable image due to platform restrictions. After all 15 phases, **3,475,088 product images** were collected. Products without images were removed from the catalogue, reducing the final product count to match.
+### Phase 3: Image Scraping (15 Phases)
 
-Dataset published on Kaggle:
-[tokopedia-images-product](https://www.kaggle.com/datasets/fati22/tokopedia-images-product)
+Each product URL was visited to retrieve its primary product image. This was the most time-intensive stage because image downloads are bandwidth-bound and each Colab session could only process a fraction of the catalogue before timing out. The scraping was split into **15 phases**, each resuming from where the previous one stopped.
+
+A subset of products could not be scraped for images. These were mostly prescription-grade medical products whose listing pages display a doctor-prescription notice instead of a product image, making automated image retrieval impossible.
+
+Final image count after all 15 phases: **3,475,088 product images**, matching a cleaned product table of the same size (down from 3,614,752 after removing image-less entries).
+
+The image dataset is also publicly available on Kaggle:
+**[tokopedia-images-product](https://www.kaggle.com/datasets/fati22/tokopedia-images-product)**
 
 ---
 
 ## Embedding Pipeline
 
-### Text Embeddings: BGE-M3 (1024 dimensions)
+### Why CLIP
 
-Product titles were encoded with **[BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3)**, a multilingual dense retrieval model that handles Indonesian and English natively. Each title was encoded into a 1024-dimensional float32 vector.
+The previous version of this system used two separate models: ViT for image embeddings and BGE-M3 for text embeddings. Those two models produce vectors in incompatible spaces (768-dim vs 1024-dim), requiring two separate FAISS indices and an intersection operation at query time.
 
-### Image Embeddings: ViT Base Patch16-224 (768 dimensions)
+CLIP solves this at the architecture level. Because it was trained end-to-end using contrastive loss on 2 billion image-text pairs, its image encoder and text encoder are trained jointly to produce vectors that occupy the same semantic space. A photo of a laptop and the phrase "laptop gaming" land close together in this shared space even though they come from completely different input modalities. This makes CLIP the natural choice for a product search system where users may query by image, by text, or by both.
 
-Product images were encoded with **[google/vit-base-patch16-224](https://huggingface.co/google/vit-base-patch16-224)**, a Vision Transformer pretrained on ImageNet-21k. Each image was resized to 224x224, processed through the ViT patch tokenizer, and the `[CLS]` token from the final hidden layer was used as the image vector (768 dimensions).
+### Model: laion/CLIP-ViT-H-14-laion2B-s32B-b79K
 
-### Phased Execution (8 Parquet Files Total)
+The model used for all embeddings is **`laion/CLIP-ViT-H-14-laion2B-s32B-b79K`**, an open CLIP model trained by LAION on 2 billion curated image-text pairs. Key specifications:
 
-Encoding 3.4 million products requires splitting the work into manageable chunks. Both the text and image embedding runs were each divided into **4 phases**, producing **8 Parquet files in total** (4 for text embeddings, 4 for image embeddings). Each Parquet file stores product IDs alongside their corresponding vectors.
+| Property | Value |
+|---|---|
+| Vision backbone | ViT-H/14 (1280-dim internal, 32 encoder layers) |
+| Text backbone | Transformer (1024-dim internal, 24 encoder layers) |
+| Output dimension | 1024-dim (after visual and text projection layers) |
+| Training data | LAION-2B (2 billion image-text pairs) |
+| Similarity metric | Cosine similarity (L2-normalized dot product) |
+
+Both the image encoder and the text encoder project their outputs to the same **1024-dimensional** space through learned linear projection layers (`visual_projection` and `text_projection`). After L2 normalization, vectors from both modalities can be compared directly using inner product.
+
+### Embedding Process (14 Phases)
+
+Embedding 3.4 million product images with a ViT-H/14 backbone is computationally heavy. The embedding run was divided into **14 sequential phases** on Kaggle GPU notebooks (Tesla T4), each processing a slice of the dataset and saving one output Parquet file. The batch size was set to 32 to stay within T4 VRAM limits.
+
+Each Parquet file stores:
+
+```
+ID_Product    (int64)     Product identifier matching the SQLite metadata
+Judul         (str)       Product title, kept for traceability
+Image_Embedding (list)    1024-dim float32 CLIP image vector, L2-normalized
+```
+
+Only image embeddings are stored in the Parquet files. Text embeddings for the product catalogue are not needed because the CLIP text encoder is applied at query time directly on the user's keyword, and its output searches the same image-based FAISS index.
+
+```python
+with torch.no_grad():
+    vision_outputs = model.vision_model(pixel_values=imgs)
+    image_features = model.visual_projection(vision_outputs.pooler_output)
+    image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+```
 
 ---
 
 ## FAISS Index Construction
 
-### Image Index: IndexHNSWFlat
+### Single Index: IndexHNSWFlat with Inner Product
+
+Because all vectors are already L2-normalized and cosine similarity equals inner product for unit vectors, the index uses `faiss.METRIC_INNER_PRODUCT` to align with CLIP's native similarity metric.
 
 ```python
-M_hnsw = 32
+d      = 1024
+M      = 32
 ef     = 200
 
-core_index = faiss.IndexHNSWFlat(dim, M_hnsw)   # dim = 768
+core_index = faiss.IndexHNSWFlat(d, M, faiss.METRIC_INNER_PRODUCT)
 core_index.hnsw.efConstruction = ef
-final_index = faiss.IndexIDMap2(core_index)
+index  = faiss.IndexIDMap2(core_index)
 ```
 
-HNSW was chosen for the image index because it provides very low query latency with high recall and requires no training step. All 7 Parquet chunks were added sequentially. The final index was saved as `tokopedia_img_hnsw.faiss`.
+HNSW (Hierarchical Navigable Small World) was chosen because it delivers very low query latency with high recall and requires no training phase, which is important when indexing 3.4 million vectors in a single sequential pass across 14 Parquet files. `IndexIDMap2` wraps the core index so that `ID_Product` values are stored alongside vectors and returned directly in search results.
 
-### Text Index: IndexIVFPQ
+After construction, the index was saved and pushed to a Hugging Face dataset repository:
 
-```python
-nlist = 1000
-m     = 64
-nbits = 8
-
-quantizer  = faiss.IndexFlatL2(dim)              # dim = 1024
-core_index = faiss.IndexIVFPQ(quantizer, dim, nlist, m, nbits)
-final_index = faiss.IndexIDMap2(core_index)
 ```
-
-IVF-PQ was chosen for the text index because product quantization compresses the 1024-dimensional vectors significantly, reducing RAM usage at inference time while still allowing fast approximate search with a tunable `nprobe` value. The index was trained on the first 100,000 vectors and then populated with all 7 chunks. The final index was saved as `tokopedia_txt_ivfpq.faiss`.
-
-Both indices use `IndexIDMap2` so that `ID_Product` values are stored directly inside the index and returned in search results without an additional lookup table.
-
-After construction, both FAISS files and the SQLite metadata database were pushed to a Hugging Face dataset repository: **Viewww/tokopedia-search-indices**.
+Viewww/tokopedia-search-indices
+  tokopedia_img_CLIP_hnsw.faiss
+  metadata/metadata_tokopedia.db
+```
 
 ---
 
-## Backend: FastAPI
+### Backend: FastAPI
 
-The backend is a Python **FastAPI** application. At startup it downloads the FAISS indices and the SQLite database from Hugging Face Hub, loads the ViT and BGE-M3 models into memory, and exposes two endpoints.
+The backend is a **Python FastAPI** application deployed as a Hugging Face Space. On startup it downloads the FAISS index and SQLite metadata database from the Hugging Face Hub, then loads the CLIP model in **float16** precision to fit within the Space's RAM budget.
 
-**`POST /search`** accepts a product image, optional search text, minimum price, and maximum price. The pipeline:
+```python
+model_clip = CLIPModel.from_pretrained(MODEL_NAME, torch_dtype=torch.float16)
+```
 
-1. Decodes the uploaded image with Pillow.
-2. Encodes it with ViT to get a 768-d vector.
-3. Searches the HNSW image index for the top 2,000 nearest neighbours.
-4. If a text query is provided, encodes it with BGE-M3 to get a 1024-d vector, searches the IVF-PQ text index (nprobe=64) for top 5,000 candidates, then intersects with the image candidates.
-5. Queries the SQLite database for product metadata of all surviving candidates.
-6. Filters by price range.
-7. Re-ranks by the original FAISS image similarity order.
-8. Returns the top 100 results as JSON.
+Two helper functions handle embedding at inference time:
 
-**`GET /get-image`** fetches the live primary image URL for a given product from Tokopedia's GraphQL API in real time.
+```python
+def embed_image(pil_img):
+    inputs       = processor(images=pil_img, return_tensors="pt")
+    pixel_values = inputs['pixel_values'].to(device)
+    with torch.no_grad():
+        vision_outputs = model_clip.vision_model(pixel_values=pixel_values)
+        img_emb        = model_clip.visual_projection(vision_outputs.pooler_output)
+        img_emb        = img_emb / img_emb.norm(dim=-1, keepdim=True)
+    return img_emb.float().cpu().numpy().astype('float32')
+
+def embed_text(text):
+    text_inputs = processor(
+        text=text, padding=True, truncation=True,
+        max_length=77, return_tensors="pt"
+    ).to(device)
+    with torch.no_grad():
+        text_outputs = model_clip.text_model(**text_inputs)
+        txt_emb      = model_clip.text_projection(text_outputs.pooler_output)
+        txt_emb      = txt_emb / txt_emb.norm(dim=-1, keepdim=True)
+    return txt_emb.float().cpu().numpy().astype('float32')
+```
+
+**`POST /search`** accepts a product image, an optional text keyword, a minimum price, and a maximum price. The search pipeline proceeds as follows:
+
+```
+1. Decode uploaded image with Pillow
+2. Encode image with CLIP vision encoder + visual_projection
+   → 1024-dim L2-normalized float32 vector
+3. Search the single HNSW FAISS index → top-2000 candidate IDs
+
+4. If user provided a text keyword:
+     Encode keyword with CLIP text encoder + text_projection
+     → 1024-dim L2-normalized float32 vector
+     Search the SAME FAISS index → top-5000 IDs
+     Keep only candidate IDs that appear in both result sets,
+     preserving the original visual similarity ranking order
+
+5. Query SQLite for metadata of surviving candidate IDs
+6. Filter by price range (price_min to price_max)
+7. Sort by original FAISS visual similarity rank
+8. Return top-100 results as JSON
+```
+
+**`GET /get-image`** fetches the live primary image URL for a given product from Tokopedia's GraphQL API in real time, since image URLs are not stored statically in the metadata database.
 
 ---
 
@@ -187,20 +270,19 @@ The frontend is a plain single-page application built with **HTML, CSS, and Java
 
 ---
 
-## Tech Stack
+## Tools and Libraries
 
-| Layer | Technology |
+| Category | Library / Tool |
 |---|---|
 | Data Scraping | Python `requests`, Tokopedia GraphQL API |
 | Data Storage | SQLite, Parquet, Kaggle Datasets |
-| Image Embedding | ViT Base Patch16-224 (Hugging Face Transformers) |
-| Text Embedding | BGE-M3 (Sentence Transformers) |
-| Vector Search | FAISS (IndexHNSWFlat, IndexIVFPQ) |
-| Backend | FastAPI, Uvicorn, Python |
-| Frontend | HTML, CSS, JavaScript |
-| Deployment | Hugging Face Spaces (backend + frontend separately) |
-| Model Hosting | Hugging Face Hub |
-| Embedding Environment | Google Colab, Kaggle Notebooks (GPU) |
+| Image and Text Embedding | CLIP ViT-H/14 (`laion/CLIP-ViT-H-14-laion2B-s32B-b79K`) via Hugging Face Transformers |
+| Vector Search | FAISS (IndexHNSWFlat, IndexIDMap2, METRIC_INNER_PRODUCT) |
+| Backend | FastAPI, Uvicorn |
+| Frontend | HTML, CSS, JavaScript, Cropper.js |
+| Model / Index Hosting | Hugging Face Hub (Datasets + Spaces) |
+| Embedding Environment | Kaggle Notebooks (GPU: Tesla T4) |
+| Scraping Environment | Google Colab |
 
 ---
 
