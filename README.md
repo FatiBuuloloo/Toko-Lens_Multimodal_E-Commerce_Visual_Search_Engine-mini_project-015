@@ -97,7 +97,7 @@ toko-lens-retrieval/
     ├── index.html           # Main user interface for multimodal search
     ├── style.css            # Visual styling and responsive layouts
     └── assets/              # Local JavaScript modules for image cropping and API integration
-
+```
 ---
 
 ## Data Pipeline
