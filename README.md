@@ -210,6 +210,6 @@ The frontend is a plain single-page application built with **HTML, CSS, and Java
 |---|---|
 | Live Demo | https://viewww-tokolens.static.hf.space |
 | Frontend Space | https://huggingface.co/spaces/Viewww/TokoLens/tree/main |
-| Backend Space | https://huggingface.co/spaces/Viewww/image-retrieval-backend/tree/main |
+| Backend Space | https://huggingface.co/spaces/sole1l/tokolens-backend/tree/main |
 | Products Dataset | https://www.kaggle.com/datasets/fati22/tokopedia-products-with-images-dataset-v1 |
 | Images Dataset | https://www.kaggle.com/datasets/fati22/tokopedia-images-product |
