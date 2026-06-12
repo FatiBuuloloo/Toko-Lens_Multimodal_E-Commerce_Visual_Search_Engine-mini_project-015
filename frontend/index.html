@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toko Lens</title>
+    <link rel="icon" type="image/png" href="assets/buka_mata.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600&family=Playfair+Display:wght@700;900&display=swap');
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: linear-gradient(180deg, #D5F7D5 0%, #FFFFFF 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            color: #111;
+        }
+
+        /* ---- Navbar ---- */
+        .tl-navbar {
+            background: linear-gradient(90deg, #1e8c3a 0%, #25a347 60%, #2db554 100%);
+            display: flex; align-items: center; padding: 0 28px; height: 72px; gap: 16px;
+            box-shadow: 0 3px 12px rgba(30,140,58,0.35);
+            position: sticky; top: 0; z-index: 100;
+        }
+        .tl-navbar-title {
+            font-family: 'Nunito', sans-serif; font-size: 1.5rem; font-weight: 900;
+            color: #fff; letter-spacing: -0.5px;
+        }
+        .tl-nav-btn {
+            background: transparent; color: white; border: 2px solid rgba(255,255,255,0.7);
+            border-radius: 20px; padding: 6px 20px; font-size: 0.88rem; font-weight: 700;
+            cursor: pointer; font-family: 'Nunito', sans-serif; transition: background 0.2s;
+        }
+        .tl-nav-btn:hover { background: rgba(255,255,255,0.2); }
+
+        /* ---- Overlay Modals ---- */
+        .tl-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+            backdrop-filter: blur(8px); z-index: 999;
+            display: none; align-items: center; justify-content: center;
+        }
+        .tl-overlay.active { display: flex; }
+        
+        .tl-modal {
+            background: #eef7ee; border-radius: 20px; max-width: 640px; width: 90%;
+            padding: 36px 40px; box-shadow: 0 24px 80px rgba(0,0,0,0.3);
+            border-left: 12px solid #25a347; text-align: left; position: relative;
+        }
+        .tl-modal h2 { text-align: center; font-weight: 900; color: #1a1a1a; margin-bottom: 20px; font-family: 'Nunito', sans-serif; }
+        .tl-modal ul { list-style: none; padding: 0; }
+        .tl-modal li { font-weight: 600; margin-bottom: 14px; display: flex; gap: 10px; }
+        .tl-modal li::before { content: "•"; color: #25a347; font-weight: bold; }
+
+        .btn-modal-close {
+            background: #25a347; color: white; border: none; border-radius: 10px;
+            padding: 8px 20px; font-weight: bold; cursor: pointer;
+            display: block; margin: 20px auto 0 auto;
+        }
+
+        /* ---- View Sections ---- */
+        .view-section { display: none; padding: 24px; }
+        .view-section.active { display: block; }
+
+        #loading-overlay {
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: calc(100vh - 72px);
+            text-align: center;
+            color: #25a347;
+            font-weight: bold;
+        }
+        /* Override eksplisit saat active*/
+        #loading-overlay.active { display: flex !important; }
+
+        /* ---- DISPLAY 2: Search Page ---- */
+        .tl-search-page { display: flex; flex-direction: column; align-items: center; padding-top: 4vh; }
+        .tl-search-title {
+            font-family: 'Playfair Display', Georgia, serif; font-size: 3.2rem; font-weight: 900;
+            color: #1e6b2e; margin: 15px 0 28px 0; text-align: center; line-height: 1.2;
+        }
+        .uploader-box {
+            background-color: #F0FBF0; border: 2px solid #b2deb2; border-radius: 48px;
+            padding: 36px 40px; max-width: 520px; width: 100%; margin: 0 auto;
+            box-shadow: 0 16px 48px rgba(37, 163, 71, 0.10); text-align: center;
+        }
+        .dropzone {
+            border: 2px dashed #3fae62; border-radius: 24px; background: #ffffff;
+            padding: 40px 20px; cursor: pointer; margin-bottom: 16px;
+        }
+        .dropzone p { font-family: 'Nunito', sans-serif; font-size: 1rem; font-weight: 700; color: #2b5c36; }
+        
+        .btn-green {
+            background-color: #25a347; color: white; font-weight: bold; border-radius: 14px;
+            padding: 12px 30px; border: none; cursor: pointer; font-size: 1rem; width: 100%;
+            max-width: 300px; display: inline-block; transition: background 0.2s;
+        }
+        .btn-green:hover { background-color: #1d8238; }
+
+        /* ---- DISPLAY 3: Results Layout ---- */
+        .results-container { display: flex; gap: 30px; max-width: 1400px; margin: 0 auto; }
+        .left-panel {
+            flex: 4; background: white; padding: 20px; border-radius: 16px;
+            border: 1px solid #c2dfc2; height: fit-content;
+        }
+        .right-panel { flex: 6; }
+        
+        .cropper-area {
+            width: 350px; height: 350px; background: #eaf7ea;
+            margin: 10px auto; overflow: hidden; border-radius: 12px; position: relative;
+        }
+        .cropper-area img { max-width: 100%; display: block; }
+
+        /* Filter Box */
+        .filter-bar {
+            background: #ffffff; border: 2px solid #c2dfc2; border-radius: 16px;
+            padding: 16px; margin-bottom: 20px; display: flex; gap: 15px;
+            align-items: center; box-shadow: 0 4px 16px rgba(37,163,71,0.08);
+        }
+        .filter-bar input {
+            padding: 10px; border: 2px solid #a3cfa3; border-radius: 10px;
+            font-weight: 600; font-size: 0.95rem; outline: none;
+        }
+        .filter-bar input:focus { border-color: #25a347; }
+        .input-text { flex: 2; }
+        .input-num { flex: 1; width: 100px; }
+
+        /* Hero Product Card */
+        .tl-hero {
+            display: flex; gap: 20px; padding: 20px; background: #fff; border-radius: 12px;
+            border: 1px solid #e5ede5; margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        .tl-hero-img { width: 140px; height: 140px; object-fit: cover; border-radius: 12px; background: #eee; flex-shrink: 0; }
+        .tl-hero-info { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+        .tl-hero-name { font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 1.1rem; color: #111; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .tl-hero-rating { color: #e69c00; font-weight: 600; }
+        .tl-hero-price { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 1.4rem; color: #e44040; }
+        .tl-hero-btn {
+            background: linear-gradient(135deg, #1e8c3a, #2db554); color: #fff; border: none;
+            border-radius: 10px; padding: 10px 20px; font-weight: 700; text-decoration: none;
+            text-align: center; width: fit-content; box-shadow: 0 4px 12px rgba(30,140,58,.3);
+        }
+
+        /* Grid Products */
+        .grid-title { font-family: 'Nunito', sans-serif; font-weight: 800; margin-bottom: 15px; font-size: 1.3rem; }
+        .products-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px; max-height: 500px; overflow-y: auto; padding-right: 5px;
+        }
+        .grid-card {
+            background: #fff; border: 1px solid #e5ede5; border-radius: 10px; padding: 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); cursor: pointer; transition: transform 0.2s;
+        }
+        .grid-card:hover { transform: translateY(-3px); }
+        .grid-card img { width: 100%; height: 130px; object-fit: cover; border-radius: 8px; background: #f0f0f0; }
+        .grid-card-name {
+            font-size: 0.85rem; font-weight: 600; color: #222; margin: 8px 0 4px 0;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+            overflow: hidden; height: 34px;
+        }
+        .grid-card-price { color: #e44040; font-weight: 800; font-size: 0.95rem; }
+
+        /* ---- DISPLAY 4: Not Found ---- */
+        .tl-notfound {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; min-height: 60vh; gap: 18px;
+            font-family: 'Nunito', sans-serif; font-size: 1.4rem;
+            font-weight: 700; color: #555; text-align: center;
+        }
+
+        /* Camera */
+        #camera-wrapper {
+            display: none; width: 100%; max-width: 400px; margin: 15px auto;
+            border-radius: 12px; overflow: hidden; border: 3px solid #25a347; position: relative;
+        }
+        #video { width: 100%; display: block; background: #000; }
+
+        /* Loading Spinner */
+        .spinner {
+            border: 4px solid rgba(0,0,0,0.1); border-left-color: #25a347;
+            border-radius: 50%; width: 40px; height: 40px;
+            animation: spin 1s linear infinite; margin: 20px auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* ---- How It Works ---- */
+        .tl-modal-hiw {
+            background: #eef7ee; border-radius: 20px; max-width: 640px; width: 90%;
+            padding: 32px 40px 28px; box-shadow: 0 24px 80px rgba(0,0,0,0.3);
+            border-left: 12px solid #25a347; position: relative;
+            display: flex; flex-direction: column; max-height: 88vh;
+        }
+        .tl-modal-hiw h2 {
+            text-align: center; font-weight: 900; color: #1a1a1a;
+            margin-bottom: 20px; font-family: 'Nunito', sans-serif;
+            flex-shrink: 0;
+        }
+        .hiw-scroll-body {
+            flex: 1; overflow-y: auto; padding-right: 10px;
+            scroll-behavior: smooth;
+        }
+        .hiw-scroll-body::-webkit-scrollbar { width: 6px; }
+        .hiw-scroll-body::-webkit-scrollbar-track {
+            background: #d5f0d5; border-radius: 3px;
+        }
+        .hiw-scroll-body::-webkit-scrollbar-thumb {
+            background: #25a347; border-radius: 3px;
+        }
+        .hiw-step {
+            display: flex; gap: 16px; margin-bottom: 18px; align-items: flex-start;
+        }
+        .hiw-badge {
+            background: linear-gradient(135deg, #1e8c3a, #2db554);
+            color: #fff; border-radius: 50%; min-width: 36px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 900; font-size: 1rem; font-family: 'Nunito', sans-serif;
+            box-shadow: 0 4px 10px rgba(37,163,71,0.35); flex-shrink: 0;
+        }
+        .hiw-step-text {
+            font-size: 0.93rem; font-weight: 600; color: #2b4a2e;
+            line-height: 1.6; padding-top: 7px;
+        }
+        .hiw-img-block {
+            text-align: center; margin: 6px 0 22px 52px;
+        }
+        .hiw-img-block img {
+            max-width: 100%; border-radius: 12px;
+            border: 2px solid #c2dfc2;
+            box-shadow: 0 4px 18px rgba(37,163,71,0.13);
+        }
+        .hiw-divider {
+            border: none; border-top: 2px dashed #b2deb2; margin: 18px 0 22px 0;
+        }
+        .hiw-scroll-hint {
+            text-align: center; font-size: 0.75rem; color: #6aaa7a;
+            margin-top: 4px; flex-shrink: 0;
+            animation: hiw-bounce 1.8s ease-in-out infinite;
+        }
+        @keyframes hiw-bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(4px); }
+        }
+
+        /* Outline utama kotak crop */
+        .cropper-view-box {
+            outline: 5px solid rgba(37, 163, 71, 0.95) !important;
+            outline-color: rgba(37, 163, 71, 0.95) !important;
+            border-radius: 14px !important;
+        }
+        .cropper-line { background-color: transparent !important; }
+        .cropper-line.line-e,
+        .cropper-line.line-w { width: 8px !important; }
+        .cropper-line.line-n,
+        .cropper-line.line-s { height: 8px !important; }
+        .cropper-point.point-n,
+        .cropper-point.point-s,
+        .cropper-point.point-e,
+        .cropper-point.point-w { display: none !important; }
+        .cropper-point.point-nw,
+        .cropper-point.point-ne,
+        .cropper-point.point-sw,
+        .cropper-point.point-se {
+            opacity: 0 !important;
+            width: 28px !important;
+            height: 28px !important;
+        }
+        .cropper-dashed,
+        .cropper-center { display: none !important; }
+
+        /* RESPONSIVE — MOBILE BREAKPOINTS */
+        /* Tablet & HP */
+        @media (max-width: 768px) {
+
+            /* Navbar: kurangi padding & ukuran agar dua tombol muat */
+            .tl-navbar { padding: 0 12px; height: 60px; gap: 8px; }
+            .tl-navbar img { height: 46px !important; }
+            .tl-navbar-title { font-size: 1.1rem; }
+            .tl-nav-btn { padding: 5px 10px; font-size: 0.76rem; border-radius: 14px; }
+
+            /* View section: padding lebih sempit */
+            .view-section { padding: 12px; }
+
+            /* Modal: lebih narrow, padding dikecilkan */
+            .tl-modal { padding: 22px 16px; border-left-width: 7px; width: 95%; }
+            .tl-modal-hiw { padding: 20px 14px 14px; border-left-width: 7px; width: 95%; max-height: 92vh; }
+
+            /* HIW: hilangkan indentasi gambar agar tidak terlalu kanan */
+            .hiw-img-block { margin-left: 0; }
+
+            /* Search Page */
+            /* Judul lebih kecil */
+            .tl-search-title { font-size: 1.9rem; margin: 8px 0 16px 0; }
+
+            /* GIF maskot: perkecil supaya tidak makan terlalu banyak layar */
+            #view-search .tl-search-page > div:first-child     { height: 150px !important; margin-bottom: 6px !important; }
+            #view-search .tl-search-page > div:first-child img { height: 150px !important; }
+
+            /* Uploader box: padding lebih ringkas */
+            .uploader-box { padding: 20px 14px; border-radius: 28px; }
+            .dropzone { padding: 26px 14px; }
+
+            /* Filter Bar */
+            .filter-bar { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+
+            /* Baris 1: search input full width */
+            .input-text { flex: 1 1 100% !important; }
+
+            /* Baris 2: min & max input bersebelahan */
+            .input-num  { flex: 1 1 0 !important; min-width: 70px !important; width: auto !important; }
+
+            /* Tombol Apply */
+            .filter-bar .btn-green {
+                flex: 0 0 auto;
+                width: auto !important;
+                max-width: none !important;
+                padding: 10px 18px !important;
+            }
+
+            /* Results: LEFT & RIGHT */
+            .results-container { flex-direction: column; gap: 14px; }
+            .left-panel  { width: 100%; }
+            .right-panel { width: 100%; }
+
+            /* Cropper: full width, tinggi fixed agar bisa dipakai */
+            .cropper-area { width: 100% !important; height: 260px; }
+
+            /* Tombol di left panel: full width */
+            .left-panel .btn-green { max-width: 100%; }
+
+            /* Products Grid */
+            /* Kolom lebih kecil agar muat di HP */
+            .products-grid {
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+                max-height: none;   /* biarkan halaman yang scroll, bukan grid */
+                padding-right: 0;
+            }
+
+            /* Hero Card */
+            .tl-hero { padding: 12px; gap: 12px; }
+            .tl-hero-img { width: 100px; height: 100px; }
+            .tl-hero-price { font-size: 1.15rem; }
+            .tl-hero-name { font-size: 1rem; }
+
+            /* Not Found */
+            .tl-notfound { font-size: 1.1rem; min-height: 40vh; }
+            #view-notfound .tl-notfound img { height: 170px !important; }
+        }
+
+        /* HP Kecil ( ≤ 420px ) */
+        @media (max-width: 420px) {
+            .tl-navbar-title { font-size: 0.95rem; }
+            .tl-nav-btn { padding: 4px 8px; font-size: 0.7rem; }
+            .tl-search-title { font-size: 1.55rem; }
+            .cropper-area { height: 220px; }
+            .tl-hero-img { width: 85px; height: 85px; }
+
+            /* 2 kolom tetap di HP paling kecil */
+            .products-grid { grid-template-columns: repeat(2, 1fr); }
+
+            /* Grid card image sedikit lebih pendek */
+            .grid-card img { height: 110px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <div class="tl-navbar">
+        <img src="assets/buka_mata.png" alt="Logo" style="height:64px; width:auto; margin-right:5px;"
+             onerror="this.style.display='none'">
+        <span class="tl-navbar-title">Toko Lens</span>
+        <div style="margin-left:auto; display:flex; gap:12px;">
+            <button class="tl-nav-btn" onclick="openModal('modal-hiw')">How it Works</button>
+            <button class="tl-nav-btn" onclick="openModal('modal-guide')">Guide</button>
+        </div>
+    </div>
+
+    <!-- MODAL: DISCLAIMER -->
+    <div id="modal-disclaimer" class="tl-overlay" onclick="closeDisclaimer()">
+        <div class="tl-modal">
+            <h2>DISCLAIMER</h2>
+            <ul style="margin-bottom:10px;">
+                <li>This website is part of an independent research project in the fields of Deep Learning and Information Retrieval.</li>
+                <li>This website is NOT affiliated with, managed, or endorsed by Tokopedia or any other third parties.</li>
+                <li>This system is experimental and may yield less relevant results under certain conditions.</li>
+                <li>Images uploaded are processed in real-time within system memory and are not permanently stored.</li>
+            </ul>
+            <p style="text-align:center; color:#6aaa7a; font-size:0.82rem; margin-top:14px; letter-spacing:0.03em;">Tap anywhere to continue</p>
+        </div>
+    </div>
+
+    <!-- MODAL: HOW IT WORKS -->
+    <div id="modal-hiw" class="tl-overlay" onclick="closeModal('modal-hiw')">
+        <div class="tl-modal-hiw" onclick="event.stopPropagation()">
+            <h2>⚙️ How It Works</h2>
+
+            <div class="hiw-scroll-body">
+
+                <!-- Step 1 -->
+                <div class="hiw-step">
+                    <div class="hiw-badge">1</div>
+                    <div class="hiw-step-text">
+                        Upload a product image from your device or use your device's camera
+                        to snap a live photo of the item you want to search.
+                    </div>
+                </div>
+
+                <!-- Image after step 1 -->
+                <div class="hiw-img-block">
+                    <img src="assets/how_it_works_(1).png" alt="Upload step"
+                         onerror="this.style.display='none'">
+                </div>
+
+                <hr class="hiw-divider">
+
+                <!-- Step 2 -->
+                <div class="hiw-step">
+                    <div class="hiw-badge">2</div>
+                    <div class="hiw-step-text">
+                        Use the built-in cropping tool to isolate the specific object you're
+                        looking for, removing background clutter to ensure maximum search accuracy.
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="hiw-step">
+                    <div class="hiw-badge">3</div>
+                    <div class="hiw-step-text">
+                        Add text keywords in the search to further refine your results.
+                    </div>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="hiw-step">
+                    <div class="hiw-badge">4</div>
+                    <div class="hiw-step-text">
+                        Set your preferred price range to match your budget.
+                    </div>
+                </div>
+
+                <!-- Image after step 4 -->
+                <div class="hiw-img-block">
+                    <img src="assets/how_it_works_(2).png" alt="Filter and price step"
+                         onerror="this.style.display='none'">
+                </div>
+
+            </div>
+
+            <p class="hiw-scroll-hint">&#9660; scroll to see more</p>
+            <button class="btn-modal-close" onclick="closeModal('modal-hiw')">Close</button>
+        </div>
+    </div>
+
+    <!-- ── MODAL: GUIDE ───────────────────────────────────────────────────── -->
+    <div id="modal-guide" class="tl-overlay" onclick="closeModal('modal-guide')">
+        <div class="tl-modal" onclick="event.stopPropagation()">
+            <h2>📸 Photo Guide</h2>
+            <ul>
+                <li>Place the item in a good position — on a flat, clean surface.</li>
+                <li>Ensure sufficient lighting; natural light is highly recommended.</li>
+                <li>Avoid including other objects around the item you want to search.</li>
+                <li>Keep your hands and shadows out of the photo frame.</li>
+                <li>Use a plain background to make the item stand out clearly.</li>
+                <li>Take the photo straight from the front, avoid tilted or side angles.</li>
+                <li>Ensure the item fills most of the frame without being cut off.</li>
+            </ul>
+            <button class="btn-modal-close" onclick="closeModal('modal-guide')">Close</button>
+        </div>
+    </div>
+
+    <!-- MAIN VIEWS -->
+    <main>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="view-section">
+            <img src="assets/loading.gif" alt="Loading..." style="width:180px;">
+        </div>
+
+        <!-- VIEW 2: Search / Upload Page -->
+        <div id="view-search" class="view-section">
+            <div class="tl-search-page">
+                <div style="height:250px; display:flex; align-items:center; justify-content:center; margin-bottom:10px;">
+                    <img src="assets/kedip_mata.gif" style="height:250px;"
+                         onerror="this.src='https://img.icons8.com/emoji/96/owl-emoji.png'">
+                </div>
+                <h1 class="tl-search-title">Search With Your Image</h1>
+
+                <div class="uploader-box">
+                    <div class="dropzone" onclick="document.getElementById('file-input').click()">
+                        <p>Drag and Drop image here or click to upload</p>
+                        <input type="file" id="file-input" accept="image/*" style="display:none"
+                               onchange="handleFileSelect(event)">
+                    </div>
+                    <button class="btn-green" onclick="toggleCamera()">📸 Upload via Camera</button>
+                    <div id="camera-wrapper">
+                        <video id="video" autoplay playsinline></video>
+                        <button class="btn-green" style="margin:10px 0; max-width:90%"
+                                onclick="captureCamera()">Ambil Foto</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 3: Results + Cropper -->
+        <div id="view-results" class="view-section">
+            <!-- Filter Bar -->
+            <div class="filter-bar">
+                <input type="text" id="filter-search" class="input-text"
+                       placeholder="🔍 Search product name...">
+                <input type="number" id="filter-min" class="input-num"
+                       placeholder="Min Price" value="0">
+                <span style="font-weight:bold; color:#777">—</span>
+                <input type="number" id="filter-max" class="input-num"
+                       placeholder="Max Price" value="100000000">
+                <!--
+                    FIX: applyFilters() sekarang sudah diimplementasikan di bawah.
+                    Fungsi ini mengirim ulang search dengan gambar saat ini + filter baru.
+                -->
+                <button class="btn-green" style="max-width:120px; padding:10px;"
+                        onclick="applyFilters()">Apply</button>
+            </div>
+
+            <div class="results-container">
+                <div class="left-panel">
+                    <p style="font-size:0.85rem; color:#666; margin-bottom:8px;">
+                        🔲 Adjust the box to focus on a specific item
+                    </p>
+                    <div class="cropper-area">
+                        <img id="cropper-target" src="">
+                    </div>
+                    <!--
+                        FIX: searchCroppedImage() sekarang sudah diimplementasikan di bawah.
+                        Fungsi ini crop canvas → update globalRawBlob → reset filter → kirim search.
+                    -->
+                    <button class="btn-green" style="margin-top:15px;"
+                            onclick="searchCroppedImage()">🔍 Search Cropped Area</button>
+                    <button class="btn-green" style="background:#888; margin-top:8px;"
+                            onclick="resetToSearch()">⬅ New Search</button>
+                </div>
+
+                <div class="right-panel">
+                    <div id="hero-placeholder"></div>
+                    <h4 class="grid-title">Similar Products</h4>
+                    <div class="products-grid" id="grid-placeholder"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 4: Not Found -->
+        <div id="view-notfound" class="view-section">
+            <div class="tl-notfound">
+                <img src="assets/item_not_found.gif" style="height:250px;"
+                     onerror="this.src='https://img.icons8.com/emoji/96/owl-emoji.png'">
+                <div>Hmm, no matching products found.</div>
+                <p style="font-size:1rem; color:#888;">Try a different image or adjust the price filter.</p>
+                <button class="btn-green" style="max-width:200px" onclick="resetToSearch()">⬅ Try Again</button>
+            </div>
+        </div>
+
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script>
+        // CONFIG 
+        const BACKEND_URL    = "https://viewww-image-retrieval-backend.hf.space";
+        const cleanBackendUrl = BACKEND_URL.replace(/\/$/, "");
+
+        // STATE
+        let globalRawBlob    = null;
+        let cropperInstance  = null;
+        let globalResults    = [];
+        let videoStream      = null;
+        
+        let currentCropperSrc  = null;
+        let needsCropperReinit = false;
+
+        // INIT
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('modal-disclaimer').classList.add('active');
+        });
+
+        // MODAL HELPERS
+        function closeDisclaimer() {
+            document.getElementById('modal-disclaimer').classList.remove('active');
+            switchView('view-search');
+        }
+        function openModal(id)  { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        // VIEW SWITCH
+        function switchView(viewId) {
+            document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+        }
+
+        // RESET
+        function resetToSearch() {
+            stopCamera();
+            globalRawBlob        = null;
+            currentCropperSrc    = null;
+            needsCropperReinit   = false;
+            if (cropperInstance) { cropperInstance.destroy(); cropperInstance = null; }
+            document.getElementById('file-input').value = "";
+            switchView('view-search');
+        }
+
+        // CAMERA HANDLERS
+        async function toggleCamera() {
+            const wrapper = document.getElementById('camera-wrapper');
+            const video   = document.getElementById('video');
+            if (wrapper.style.display === 'block') {
+                stopCamera();
+            } else {
+                try {
+                    videoStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: "environment" }, audio: false
+                    });
+                    video.srcObject = videoStream;
+                    wrapper.style.display = 'block';
+                } catch (err) {
+                    alert("Gagal mengakses kamera: " + err.message);
+                }
+            }
+        }
+
+        function stopCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            document.getElementById('camera-wrapper').style.display = 'none';
+        }
+
+        function captureCamera() {
+            const video  = document.getElementById('video');
+            const canvas = document.createElement('canvas');
+            canvas.width  = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob((blob) => {
+                globalRawBlob       = blob;
+                currentCropperSrc   = URL.createObjectURL(blob);
+                needsCropperReinit  = true;
+                stopCamera();
+                // Reset filter ke default
+                resetFilters();
+                // Langsung jalankan search
+                sendSearchRequest(blob);
+            }, 'image/jpeg', 0.95);
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            globalRawBlob      = file;
+            currentCropperSrc  = URL.createObjectURL(file);
+            needsCropperReinit = true;
+            // Reset filter ke default
+            resetFilters();
+            // Langsung jalankan search
+            sendSearchRequest(file);
+        }
+
+        // HELPER: Reset filter ke nilai default
+        function resetFilters() {
+            document.getElementById('filter-search').value = '';
+            document.getElementById('filter-min').value   = '0';
+            document.getElementById('filter-max').value   = '100000000';
+        }
+
+        // CROPPER INIT
+
+        function initCropper(imageSrc) {
+            const imageEl = document.getElementById('cropper-target');
+            if (cropperInstance) { cropperInstance.destroy(); cropperInstance = null; }
+            imageEl.src     = imageSrc;
+            imageEl.onload  = function () {
+                cropperInstance = new Cropper(imageEl, {
+                    aspectRatio             : NaN,
+                    viewMode                : 1,
+                    background              : false,
+                    autoCropArea            : 0.9,
+                    dragMode                : 'move',
+                    guides                  : false,
+                    center                  : false,
+                    highlight               : true,
+                    cropBoxMovable          : true,
+                    cropBoxResizable        : true,
+                    toggleDragModeOnDblclick: false,
+                    minCropBoxWidth         : 40,
+                    minCropBoxHeight        : 40,
+                });
+            };
+        }
+
+        // SEARCH CROPPED AREA
+        
+        function searchCroppedImage() {
+            if (!cropperInstance) {
+                alert("Belum ada gambar yang bisa di-crop.");
+                return;
+            }
+            // Reset filter ke default
+            resetFilters();
+
+            cropperInstance.getCroppedCanvas().toBlob((blob) => {
+                // Update globalRawBlob ke hasil crop
+                globalRawBlob      = blob;
+                currentCropperSrc  = URL.createObjectURL(blob);
+                needsCropperReinit = true;
+                sendSearchRequest(blob);
+            }, 'image/jpeg', 0.95);
+        }
+
+        // APPLY FILTERS
+        function applyFilters() {
+            if (!globalRawBlob) {
+                alert("Silakan upload gambar terlebih dahulu.");
+                return;
+            }
+            // Jangan reinit cropper — user hanya mengubah filter, bukan gambar
+            needsCropperReinit = false;
+            sendSearchRequest(globalRawBlob);
+        }
+
+        // CORE: SEND SEARCH REQUEST
+        async function sendSearchRequest(imageBlob) {
+            switchView('loading-overlay');
+
+            const text     = document.getElementById('filter-search').value;
+            const minPrice = parseInt(document.getElementById('filter-min').value) || 0;
+            const maxPrice = parseInt(document.getElementById('filter-max').value) || 100000000;
+
+            const formData = new FormData();
+            formData.append('file',        imageBlob, 'query_image.jpg');
+            formData.append('search_text', text);
+            formData.append('price_min',   minPrice);
+            formData.append('price_max',   maxPrice);
+
+            try {
+                const response = await fetch(`${cleanBackendUrl}/search`, {
+                    method: 'POST',
+                    body  : formData,
+                });
+
+                if (!response.ok)
+                    throw new Error(`Server merespons dengan status: ${response.status}`);
+
+                const data     = await response.json();
+                globalResults  = data.results;
+
+                if (!globalResults || globalResults.length === 0) {
+                    switchView('view-notfound');
+                } else {
+                    // Switch ke view-results DAHULU agar elemen cropper sudah visible
+                    switchView('view-results');
+                    if (needsCropperReinit && currentCropperSrc) {
+                        initCropper(currentCropperSrc);
+                        needsCropperReinit = false;
+                    }
+
+                    renderResults(0);
+                }
+            } catch (err) {
+                console.error("Detail Error Koneksi:", err);
+                alert("Gagal terhubung ke server API Backend.\nSilakan periksa status server Anda.");
+                switchView('view-notfound');
+            }
+        }
+
+        // RENDER HELPERS
+        function formatIDR(num) {
+            return "Rp " + parseInt(num).toLocaleString('id-ID');
+        }
+
+        function renderStars(r) {
+            if (!r || r === 0 || isNaN(r)) return "☆ (No Rating)";
+            const stars = "★".repeat(Math.floor(r)) + (r % 1 >= 0.5 ? "½" : "");
+            return `${stars} (${parseFloat(r).toFixed(1)})`;
+        }
+
+        // RENDER RESULTS
+        function renderResults(heroIndex) {
+            const heroPlaceholder = document.getElementById('hero-placeholder');
+            const gridPlaceholder = document.getElementById('grid-placeholder');
+            if (!globalResults || globalResults.length === 0) return;
+            const hero = globalResults[heroIndex];
+            heroPlaceholder.innerHTML = `
+                <div class="tl-hero">
+                    <img id="hero-img-tag" class="tl-hero-img"
+                         src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTQwIiBoZWlnaHQ9IjE0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTQwIiBoZWlnaHQ9IjE0MCIgZmlsbD0iI2VlZSIvPjwvc3ZnPg==">
+                    <div class="tl-hero-info">
+                        <div class="tl-hero-name">${hero.name}</div>
+                        <div class="tl-hero-rating">${renderStars(hero.rating)}</div>
+                        <div class="tl-hero-price">${formatIDR(hero.price)}</div>
+                        <a class="tl-hero-btn" href="${hero.url}" target="_blank">🛒 View in Tokopedia</a>
+                    </div>
+                </div>
+            `;
+            fetchImageAsync(hero.sid, hero.shop, hero.name, 'hero-img-tag');
+            gridPlaceholder.innerHTML = "";
+            globalResults.forEach((item, idx) => {
+                if (idx === heroIndex) return;
+                const cardId = `grid-img-${idx}`;
+                const card   = document.createElement('div');
+                card.className = "grid-card";
+                card.onclick   = () => renderResults(idx);
+                card.innerHTML = `
+                    <img id="${cardId}"
+                         src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEzMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEzMCIgZmlsbD0iI2YwZjBmMCIvPjwvc3ZnPg==">
+                    <div class="grid-card-name">${item.name}</div>
+                    <div class="grid-card-price">${formatIDR(item.price)}</div>
+                    <button class="btn-green" style="font-size:0.75rem; padding:5px; margin-top:5px; width:100%; max-width:none;">
+                        View Detail
+                    </button>
+                `;
+                gridPlaceholder.appendChild(card);
+                fetchImageAsync(item.sid, item.shop, item.name, cardId);
+            });
+        }
+
+        // ASYNC IMAGE FETCH
+        async function fetchImageAsync(sid, shop, name, targetImgId) {
+            try {
+                const res    = await fetch(
+                    `${cleanBackendUrl}/get-image?sid=${encodeURIComponent(sid)}&shop=${encodeURIComponent(shop)}&name=${encodeURIComponent(name)}`
+                );
+                const data   = await res.json();
+                const imgTag = document.getElementById(targetImgId);
+                if (imgTag && data.image_url) {
+                    imgTag.src = data.image_url;
+                }
+            } catch (e) { /* silent fail — placeholder tetap tampil */ }
+        }
+    </script>
+</body>
+</html>

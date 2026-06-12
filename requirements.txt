@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-multipart
+pillow
+numpy
+pandas
+torch --index-url https://download.pytorch.org/whl/cpu
+faiss-cpu
+huggingface_hub
+transformers
+sentence-transformers
+requests
